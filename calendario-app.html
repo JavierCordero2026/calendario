@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Calendario de Actuaciones</title>
 <script src="supabase.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="jspdf.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f5f5f3;--surface:#fff;--border:rgba(0,0,0,0.1);--text:#1a1a1a;--muted:#666;--hint:#999;--blue:#185FA5;--blue-light:#E6F1FB;--blue-dark:#0C447C;--red:#A32D2D;--red-light:#FCEBEB;--green:#27500A;--green-light:#EAF3DE;--amber:#854F0B;--amber-light:#FAEEDA;--r:8px;--rl:12px}
@@ -39,7 +39,7 @@ button{font-family:inherit;cursor:pointer;border-radius:var(--r);font-size:13px;
 .topbar-right{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
 .avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0}
 .badge-admin{font-size:10px;background:var(--amber-light);color:var(--amber);padding:2px 7px;border-radius:20px;font-weight:500}
-.main-layout{display:grid;grid-template-columns:1fr 230px;gap:14px;padding:16px 20px;max-width:1100px;margin:0 auto}
+.main-layout{display:grid;grid-template-columns:1fr 240px;gap:14px;padding:16px 20px;max-width:1100px;margin:0 auto}
 @media(max-width:700px){.main-layout{grid-template-columns:1fr}}
 .cal-card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);overflow:hidden}
 .weekdays{display:grid;grid-template-columns:repeat(7,1fr);background:var(--bg);border-bottom:.5px solid var(--border)}
@@ -57,7 +57,11 @@ button{font-family:inherit;cursor:pointer;border-radius:var(--r);font-size:13px;
 .sidebar{display:flex;flex-direction:column;gap:12px}
 .panel{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:14px}
 .panel-title{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:10px}
-.user-item{display:flex;align-items:center;gap:7px;padding:4px 0;cursor:pointer}
+.zona-group{margin-bottom:10px}
+.zona-header{font-size:11px;font-weight:600;color:var(--blue);padding:3px 0;margin-bottom:3px;border-bottom:.5px solid var(--blue-light);display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.zona-header:hover{color:var(--blue-dark)}
+.zona-filter-btn{font-size:10px;background:var(--blue-light);color:var(--blue);border:none;border-radius:4px;padding:1px 6px;cursor:pointer}
+.user-item{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer}
 .user-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .u-name{font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .u-role{font-size:10px;color:var(--amber)}
@@ -143,7 +147,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     </div>
     <div class="sidebar">
       <div class="panel">
-        <div class="panel-title">Usuarios</div>
+        <div class="panel-title">Zonas y usuarios</div>
         <div id="user-list"></div>
         <button class="btn" style="width:100%;margin-top:8px;font-size:11px" onclick="clearFilter()">Ver todos</button>
       </div>
@@ -161,6 +165,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   </div>
 </div>
 
+<!-- Modal evento -->
 <div id="ev-overlay" class="overlay" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-hdr">
@@ -175,7 +180,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
         <option value="">-- Seleccionar --</option>
         <option>HO1</option><option>HO2</option><option>HO3</option><option>HO5</option>
         <option>PRIO1</option><option>PRIO2</option><option>HAB1</option><option>HAB2</option>
-        <option>Guardia</option><option>Teletrabajo</option><option>Otros</option>
+        <option>Guardia</option><option>Teletrabajo</option><option>Delegación</option><option>Otros</option>
       </select>
     </div>
     <div class="field"><label>Fecha</label><input type="date" id="ev-date"></div>
@@ -191,6 +196,31 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   </div>
 </div>
 
+<!-- Modal gestión de zona (solo admin) -->
+<div id="zona-overlay" class="overlay" style="display:none" onclick="if(event.target===this)closeZonaModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Asignar zona a usuario</div>
+      <button class="btn-icon btn" onclick="closeZonaModal()">&#10005;</button>
+    </div>
+    <div class="field"><label>Usuario</label><select id="z-user"></select></div>
+    <div class="field"><label>Zona</label>
+      <select id="z-zona">
+        <option value="">-- Sin zona --</option>
+        <option value="ZONA 1: BAZA-HUÉSCAR">ZONA 1: BAZA-HUÉSCAR</option>
+        <option value="ZONA 2: GUADIX-MONTES ORIENTALES">ZONA 2: GUADIX-MONTES ORIENTALES</option>
+        <option value="ZONA 3: LOJA-MONTES OCCIDENTALES">ZONA 3: LOJA-MONTES OCCIDENTALES</option>
+        <option value="ZONA 4: COSTA-ZAIDÍN">ZONA 4: COSTA-ZAIDÍN</option>
+        <option value="ZONA 5: ALPUJARRA-VALLE DE LECRÍN">ZONA 5: ALPUJARRA-VALLE DE LECRÍN</option>
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeZonaModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveZona()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -198,6 +228,13 @@ const {createClient} = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 const COLORS = ['#378ADD','#1D9E75','#D4537E','#D85A30','#BA7517','#639922','#7F77DD','#993556','#888780'];
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const ZONAS = [
+  'ZONA 1: BAZA-HUÉSCAR',
+  'ZONA 2: GUADIX-MONTES ORIENTALES',
+  'ZONA 3: LOJA-MONTES OCCIDENTALES',
+  'ZONA 4: COSTA-ZAIDÍN',
+  'ZONA 5: ALPUJARRA-VALLE DE LECRÍN'
+];
 let S = {session:null,profile:null,events:[],profiles:[],curDate:new Date(),filterUsers:[],editingId:null,selColor:COLORS[0],isReadOnly:false};
 
 function switchTab(t){
@@ -245,7 +282,7 @@ async function init(){
 async function fetchProfile(uid){const {data}=await sb.from('profiles').select('*').eq('id',uid).single();return data;}
 async function loadData(){
   const [evRes,prRes]=await Promise.all([
-    sb.from('events').select('*').order('date').order('start_time'),
+    sb.from('events').select('*').order('date'),
     sb.from('profiles').select('*').order('name'),
   ]);
   S.events=evRes.data||[];S.profiles=prRes.data||[];
@@ -284,11 +321,11 @@ function renderGrid(){
     cell.className='day'+(dn<1||dn>dim?' other':'')+(sameDay(d,today)?' today':'');
     const num=document.createElement('div');num.className='day-n';num.textContent=d.getDate();cell.appendChild(num);
     const ds=fmtDate(d);
-    const de=evs.filter(e=>e.date===ds).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||''));
+    const de=evs.filter(e=>e.date===ds).sort((a,b)=>(a.actuacion||'').localeCompare(b.actuacion||''));
     de.slice(0,3).forEach(ev=>{
       const pill=document.createElement('div');pill.className='pill';
       pill.style.background=(ev.color||'#378ADD')+'28';pill.style.color=ev.color||'#378ADD';
-      pill.textContent=(ev.start_time?ev.start_time.slice(0,5)+' ':'')+ev.actuacion;
+      pill.textContent=ev.actuacion;
       pill.onclick=e=>{e.stopPropagation();openEditModal(ev);};
       cell.appendChild(pill);
     });
@@ -297,9 +334,17 @@ function renderGrid(){
     grid.appendChild(cell);
   }
 }
+
 function renderUsers(){
   const list=document.getElementById('user-list');list.innerHTML='';
-  S.profiles.forEach(u=>{
+  const isAdmin=S.profile&&S.profile.role==='admin';
+
+  // Agrupar por zona
+  const sinZona=S.profiles.filter(u=>!u.zona);
+  const grupos={};
+  ZONAS.forEach(z=>{ grupos[z]=S.profiles.filter(u=>u.zona===z); });
+
+  function renderUserItem(u){
     const item=document.createElement('div');
     const active=S.filterUsers.length===0||S.filterUsers.includes(u.id);
     item.className='user-item'+(active?' active':'');
@@ -309,25 +354,72 @@ function renderUsers(){
       else S.filterUsers.push(u.id);
       renderAll();
     };
-    list.appendChild(item);
+    return item;
+  }
+
+  // Renderizar grupos con usuarios
+  ZONAS.forEach(z=>{
+    const users=grupos[z];
+    if(!users.length)return;
+    const grp=document.createElement('div');grp.className='zona-group';
+    const hdr=document.createElement('div');hdr.className='zona-header';
+    const shortName=z.replace('ZONA ','Z').split(':')[0].trim()+':'+z.split(':')[1];
+    hdr.innerHTML=`<span style="font-size:10px">${shortName}</span>`;
+    if(isAdmin){
+      const btn=document.createElement('button');btn.className='zona-filter-btn';btn.textContent='filtrar zona';
+      btn.onclick=(e)=>{e.stopPropagation();filterByZona(z);};
+      hdr.appendChild(btn);
+    }
+    grp.appendChild(hdr);
+    users.forEach(u=>grp.appendChild(renderUserItem(u)));
+    list.appendChild(grp);
   });
+
+  // Sin zona asignada
+  if(sinZona.length){
+    const grp=document.createElement('div');grp.className='zona-group';
+    const hdr=document.createElement('div');hdr.className='zona-header';
+    hdr.innerHTML='<span style="font-size:10px;color:var(--hint)">Sin zona asignada</span>';
+    grp.appendChild(hdr);
+    sinZona.forEach(u=>grp.appendChild(renderUserItem(u)));
+    list.appendChild(grp);
+  }
+
+  // Botón gestionar zonas (solo admin)
+  if(isAdmin){
+    const btn=document.createElement('button');
+    btn.className='btn';btn.style.cssText='width:100%;margin-top:8px;font-size:11px;background:var(--blue-light);color:var(--blue);border-color:var(--blue-light)';
+    btn.textContent='⚙ Gestionar zonas';
+    btn.onclick=openZonaModal;
+    list.appendChild(btn);
+  }
 }
+
+function filterByZona(zona){
+  const ids=S.profiles.filter(u=>u.zona===zona).map(u=>u.id);
+  S.filterUsers=ids;
+  renderAll();
+}
+
 function clearFilter(){S.filterUsers=[];renderAll();}
+
 function renderUpcoming(){
   const list=document.getElementById('upcoming');
   const todayStr=fmtDate(new Date());
-  const up=S.events.filter(e=>e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date)||(a.start_time||'').localeCompare(b.start_time||'')).slice(0,5);
+  const up=S.events.filter(e=>e.date>=todayStr).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
   if(!up.length){list.innerHTML='<div style="font-size:12px;color:var(--hint)">Sin eventos próximos</div>';return;}
   list.innerHTML='';
   up.forEach(e=>{
     const [yy,mm,dd]=e.date.split('-');
-    const dl=dd+'/'+mm+'/'+yy+(e.start_time?' · '+e.start_time.slice(0,5):'');
+    const dl=dd+'/'+mm+'/'+yy;
+    const owner=S.profiles.find(p=>p.id===e.owner_id);
     const item=document.createElement('div');item.className='up-item';
-    item.innerHTML=`<div class="up-dot" style="background:${e.color||'#378ADD'}"></div><div><div class="up-title">${e.actuacion}</div><div class="up-date">${dl}</div></div>`;
+    item.innerHTML=`<div class="up-dot" style="background:${e.color||'#378ADD'}"></div><div><div class="up-title">${e.actuacion}</div><div class="up-date">${dl}${owner?' · '+owner.name:''}</div></div>`;
     item.onclick=()=>openEditModal(e);
     list.appendChild(item);
   });
 }
+
 function prevMonth(){S.curDate=new Date(S.curDate.getFullYear(),S.curDate.getMonth()-1,1);renderAll();}
 function nextMonth(){S.curDate=new Date(S.curDate.getFullYear(),S.curDate.getMonth()+1,1);renderAll();}
 function goToday(){S.curDate=new Date();renderAll();}
@@ -420,11 +512,30 @@ async function deleteEvent(){
   toast('Evento eliminado');closeModal();await loadData();renderAll();
 }
 
+// ── GESTIÓN DE ZONAS ──
+function openZonaModal(){
+  const sel=document.getElementById('z-user');
+  sel.innerHTML=S.profiles.map(p=>'<option value="'+p.id+'">'+p.name+'</option>').join('');
+  document.getElementById('z-zona').value='';
+  document.getElementById('zona-overlay').style.display='flex';
+}
+function closeZonaModal(){document.getElementById('zona-overlay').style.display='none';}
+async function saveZona(){
+  const uid=document.getElementById('z-user').value;
+  const zona=document.getElementById('z-zona').value||null;
+  const {error}=await sb.from('profiles').update({zona}).eq('id',uid);
+  if(error){toast('Error: '+error.message,'warn');return;}
+  toast('Zona asignada correctamente');
+  closeZonaModal();
+  await loadData();renderAll();
+}
+
+// ── EXPORTAR ──
 function exportCSV(){
-  const rows=[['Actuación','Fecha','Centro','Descripción','Usuario','Email']];
+  const rows=[['Zona','Usuario','Email','Actuación','Fecha','Centro','Descripción']];
   S.events.forEach(e=>{
     const p=S.profiles.find(x=>x.id===e.owner_id)||{};
-    rows.push([e.actuacion,e.date,e.centro||'',e.description||'',p.name||'',p.email||'']);
+    rows.push([p.zona||'',p.name||'',p.email||'',e.actuacion,e.date,e.centro||'',e.description||'']);
   });
   const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   dlBlob(csv,'text/csv','calendario.csv');toast('CSV exportado');
@@ -450,39 +561,69 @@ function exportWeekPDF(){
   const from=fmtDate(monLastWeek),to=fmtDate(sunLastWeek);
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const W=210,margin=14;let y=margin;
+
   doc.setFont('helvetica','bold');doc.setFontSize(16);
   doc.text('Informe semanal de actuaciones',margin,y);y+=7;
   doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(100);
   doc.text('Semana del '+fmtFriendly(from)+' al '+fmtFriendly(to),margin,y);y+=5;
   doc.text('Generado: '+fmtFriendly(fmtDate(today)),margin,y);y+=8;
   doc.setTextColor(0);
+
   const weekEvents=S.events.filter(e=>e.date>=from&&e.date<=to);
-  S.profiles.forEach(p=>{
-    const pe=weekEvents.filter(e=>e.owner_id===p.id).sort((a,b)=>a.date.localeCompare(b.date));
-    if(!pe.length)return;
-    if(y>260){doc.addPage();y=margin;}
-    doc.setFont('helvetica','bold');doc.setFontSize(11);
-    doc.setFillColor(230,241,251);
-    doc.rect(margin,y,W-margin*2,7,'F');
-    doc.text(p.name+' ('+p.email+')',margin+2,y+5);y+=9;
-    doc.setFontSize(9);
-    ['Fecha','Actuación','Centro','Descripción'].forEach((h,i)=>{
-      doc.setFont('helvetica','bold');
-      doc.text(h,margin+[0,30,75,130][i],y);
-    });
-    y+=1;doc.setDrawColor(180);doc.line(margin,y,W-margin,y);y+=4;
-    doc.setFont('helvetica','normal');
-    pe.forEach(e=>{
-      if(y>275){doc.addPage();y=margin;}
-      const [ey,em,ed]=e.date.split('-');
-      doc.text(ed+'/'+em+'/'+ey,margin,y);
-      doc.text(e.actuacion,margin+30,y);
-      doc.text(e.centro||'-',margin+75,y);
-      if(e.description){const desc=doc.splitTextToSize(e.description,55);doc.text(desc[0],margin+130,y);}
-      y+=5;
+
+  // Agrupar por zona
+  const zonasConUsuarios=[...ZONAS,'Sin zona asignada'];
+  zonasConUsuarios.forEach(zona=>{
+    const usersInZona = zona==='Sin zona asignada'
+      ? S.profiles.filter(p=>!p.zona)
+      : S.profiles.filter(p=>p.zona===zona);
+    if(!usersInZona.length)return;
+
+    const zonaEvents=usersInZona.some(u=>weekEvents.some(e=>e.owner_id===u.id));
+    if(!zonaEvents)return;
+
+    // Cabecera de zona
+    if(y>250){doc.addPage();y=margin;}
+    doc.setFont('helvetica','bold');doc.setFontSize(13);
+    doc.setFillColor(24,95,165);
+    doc.rect(margin,y,W-margin*2,8,'F');
+    doc.setTextColor(255,255,255);
+    doc.text(zona,margin+3,y+5.5);y+=11;
+    doc.setTextColor(0);
+
+    usersInZona.forEach(p=>{
+      const pe=weekEvents.filter(e=>e.owner_id===p.id).sort((a,b)=>a.date.localeCompare(b.date));
+      if(!pe.length)return;
+      if(y>260){doc.addPage();y=margin;}
+
+      doc.setFont('helvetica','bold');doc.setFontSize(10);
+      doc.setFillColor(230,241,251);
+      doc.rect(margin,y,W-margin*2,6,'F');
+      doc.setTextColor(0);
+      doc.text(p.name+' ('+p.email+')',margin+2,y+4.5);y+=8;
+
+      doc.setFontSize(9);
+      ['Fecha','Actuación','Centro','Descripción'].forEach((h,i)=>{
+        doc.setFont('helvetica','bold');
+        doc.text(h,margin+[0,30,75,130][i],y);
+      });
+      y+=1;doc.setDrawColor(180);doc.line(margin,y,W-margin,y);y+=4;
+      doc.setFont('helvetica','normal');
+
+      pe.forEach(e=>{
+        if(y>275){doc.addPage();y=margin;}
+        const [ey,em,ed]=e.date.split('-');
+        doc.text(ed+'/'+em+'/'+ey,margin,y);
+        doc.text(e.actuacion,margin+30,y);
+        doc.text(e.centro||'-',margin+75,y);
+        if(e.description){const desc=doc.splitTextToSize(e.description,55);doc.text(desc[0],margin+130,y);}
+        y+=5;
+      });
+      y+=3;
     });
     y+=4;
   });
+
   doc.save('informe_semana_'+from+'_'+to+'.pdf');
   toast('PDF generado');
 }
